@@ -14,6 +14,7 @@
 /build
 
 # arquivos de ambiente (segurança)
+.env.example
 .env
 .env.local
 .env.development.local
