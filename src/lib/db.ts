@@ -190,51 +190,10 @@ export async function createBarbershop(input: {
   return mapBarbershop(data);
 }
 
-export async function createBooking(
-  booking: Omit<Booking, 'id' | 'createdAt'>
-): Promise<Booking> {
-  const supabase = createPublicSupabaseClient();
-
-  const { data: inserted, error: bookingError } = await supabase
-    .from('bookings')
-    .insert({
-      barbershop_id: booking.barbershopId,
-      professional_id: booking.professionalId,
-      client_whatsapp: booking.clientWhatsapp,
-      booking_date: booking.date,
-      booking_time: booking.time,
-      total_price_cents: booking.totalPriceCents,
-      total_duration_minutes: booking.totalDurationMinutes,
-    })
-    .select()
-    .single();
-
-  if (bookingError) throw bookingError;
-
-  const { error: linkError } = await supabase.from('booking_services').insert(
-    booking.serviceIds.map((serviceId) => ({
-      booking_id: inserted.id,
-      service_id: serviceId,
-    }))
-  );
-
-  if (linkError) throw linkError;
-
-  const saved = mapBooking({ ...inserted, booking_services: booking.serviceIds.map((id) => ({ service_id: id })) });
-
-  // --- Automação (bastidores) ---
-  // Em produção: disparar mensagem via API do WhatsApp (Meta Cloud API / Twilio / Z-API)
-  notifyClientWhatsapp(saved);
-  // Em produção: o painel admin escuta isso via Supabase Realtime
-  // (canal `postgres_changes` na tabela `bookings`), não precisa
-  // disparar nada manualmente aqui — é reativo por natureza.
-
-  return saved;
-}
-
-function notifyClientWhatsapp(booking: Booking) {
-  console.log(`[WhatsApp] Confirmação a enviar para ${booking.clientWhatsapp} — agendamento ${booking.id}`);
-}
+// A criação de agendamento virou uma Server Action — veja
+// src/lib/actions.ts — porque, além de gravar no banco, ela também
+// dispara a confirmação via WhatsApp usando uma credencial secreta
+// (Z-API) que não pode existir no navegador.
 
 /** Gera os próximos N dias a partir de hoje, no formato usado pelo seletor de dias. */
 export function buildNextDays(count = 10): DayOption[] {

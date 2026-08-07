@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, MessageCircle, X } from 'lucide-react';
+import { AlertCircle, Loader2, MessageCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { formatWhatsappInput } from '@/lib/utils';
 
@@ -13,14 +13,20 @@ interface WhatsAppModalProps {
 export function WhatsAppModal({ onClose, onSubmit }: WhatsAppModalProps) {
   const [whatsapp, setWhatsapp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const valid = whatsapp.replace(/\D/g, '').length >= 10;
 
   async function handleSubmit() {
     if (!valid || loading) return;
     setLoading(true);
-    await onSubmit(whatsapp);
-    setLoading(false);
+    setError('');
+    try {
+      await onSubmit(whatsapp);
+    } catch {
+      setError('Não foi possível confirmar. Tente novamente em instantes.');
+      setLoading(false);
+    }
   }
 
   return (
@@ -70,6 +76,12 @@ export function WhatsAppModal({ onClose, onSubmit }: WhatsAppModalProps) {
             'Confirmar horário'
           )}
         </Button>
+
+        {error && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-barber-red">
+            <AlertCircle size={13} /> {error}
+          </p>
+        )}
       </div>
     </div>
   );

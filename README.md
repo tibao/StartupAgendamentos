@@ -57,10 +57,45 @@ A `SUPABASE_SERVICE_ROLE_KEY` **nunca** deve ter o prefixo `NEXT_PUBLIC_` — el
 - **`src/lib/supabase/admin-client.ts`** — cliente com `service_role`, ignora RLS. Usado só pelo painel `/admin` para ler os agendamentos do dia (a chave pública não tem permissão de `SELECT` em `bookings`, de propósito, pra não vazar o WhatsApp de um cliente para o outro).
 - **Segurança da assinatura**: uma trigger no banco (`enforce_new_barbershop_status`) força toda barbearia recém-cadastrada a nascer com `status = 'trial'`, mesmo que alguém tente inserir `status = 'active'` direto pela chave pública. Só um webhook de pagamento rodando com `service_role` deve poder promover para `active`.
 
-### O que ainda falta pra produção
+## WhatsApp: Z-API
+
+A confirmação de agendamento já dispara de verdade via WhatsApp.
+
+### 1. Criar a instância
+
+1. Acesse **https://app.z-api.io** e crie uma conta
+2. Crie uma instância (é o "número" que vai mandar as mensagens — pode ser um chip dedicado da barbearia/plataforma)
+3. Escaneie o QR code com o WhatsApp desse número (igual conectar o WhatsApp Web)
+
+### 2. Pegar as credenciais
+
+Dentro da instância, no dashboard da Z-API:
+
+- **Instance ID** e **Token** — aparecem na tela principal da instância
+- **Client-Token** — fica em **Segurança** (menu lateral), é um token adicional que a Z-API exige no header de toda chamada
+
+Cole os três no seu `.env.local`:
+
+```
+ZAPI_INSTANCE_ID=
+ZAPI_TOKEN=
+ZAPI_CLIENT_TOKEN=
+```
+
+### 3. Como funciona no código
+
+- **`src/lib/whatsapp/send-message.ts`** — única função que fala com a Z-API (`sendWhatsAppMessage`). Tem `import 'server-only'` no topo: se algum componente client tentar importar esse arquivo, o build quebra — é a garantia de que o token nunca vaza pro navegador.
+- **`src/lib/whatsapp/templates.ts`** — texto da mensagem de confirmação, separado do código de envio.
+- **`src/lib/actions.ts`** — a criação do agendamento virou uma **Server Action** (`createBookingAction`). O `BookingFlow` (componente client) chama essa função como se fosse local, mas ela roda inteira no servidor: grava no Supabase e dispara o WhatsApp na sequência.
+- O envio é **best-effort**: se a Z-API falhar (instância desconectada, número inválido, etc.), o agendamento continua válido no banco — só fica um log de erro. Não faz sentido derrubar a reserva do cliente por causa de uma falha no aviso.
+
+### Importante: isso não é a API oficial do WhatsApp
+
+Z-API automatiza um número comum via QR code, não é o WhatsApp Business Cloud API oficial da Meta. É a prática mais comum nesse tipo de produto no Brasil porque não exige aprovação de template, mas tecnicamente está fora dos termos de uso do WhatsApp — existe risco (baixo, mas real) do número ser bloqueado em uso intenso. Se isso virar preocupação real de negócio (volume alto, dependência crítica), migrar pra Meta Cloud API é a rota mais segura — e como o envio está isolado numa função só, a migração não exige mexer no resto do app.
+
+## O que ainda falta pra produção
 
 - **Pagamento recorrente**: `handleSubscribe` em `cadastro/page.tsx` hoje só cria a barbearia como `trial`. Falta o checkout do gateway (Stripe/Mercado Pago) e um webhook (Route Handler em `src/app/api/webhooks/...`) que atualiza `status` conforme o pagamento.
-- **WhatsApp**: `notifyClientWhatsapp` em `db.ts` só faz `console.log`. Trocar pela Meta Cloud API, Twilio ou Z-API.
 - **Autenticação do barbeiro**: `/admin` ainda abre sempre a barbearia de demonstração (`DEMO_SLUG`). Falta Supabase Auth pra saber qual barbearia pertence a quem está logado.
 - **Realtime no painel**: o schema já suporta (basta assinar `postgres_changes` na tabela `bookings` filtrando por `barbershop_id`), mas o componente do admin ainda carrega os dados só na abertura da página.
 

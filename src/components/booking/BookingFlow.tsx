@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Scissors } from 'lucide-react';
 import { Barbershop, Professional, Service, TimeSlot } from '@/lib/types';
-import { buildNextDays, createBooking, getAvailableSlots } from '@/lib/db';
+import { buildNextDays, getAvailableSlots } from '@/lib/db';
+import { createBookingAction } from '@/lib/actions';
 import { DaySelector } from './DaySelector';
 import { ServiceSelector } from './ServiceSelector';
 import { ProfessionalSelector } from './ProfessionalSelector';
@@ -58,22 +59,26 @@ export function BookingFlow({ barbershop, services, professionals }: BookingFlow
   async function handleWhatsappSubmit(whatsapp: string) {
     if (!selectedProfessionalId || !selectedTime) return;
 
-    await createBooking({
+    const day = days.find((d) => d.isoDate === selectedDate)!;
+    const dateLabel = `${day.weekdayLabel} ${day.dayNumber}`;
+    const professional = professionals.find((p) => p.id === selectedProfessionalId);
+
+    await createBookingAction({
       barbershopId: barbershop.id,
+      barbershopName: barbershop.name,
       serviceIds: selectedServiceIds,
+      serviceNames: selectedServices.map((s) => s.name),
       professionalId: selectedProfessionalId,
+      professionalName: professional?.name ?? '',
       clientWhatsapp: whatsapp,
       date: selectedDate,
+      dateLabel,
       time: selectedTime,
       totalPriceCents,
       totalDurationMinutes,
     });
 
-    const day = days.find((d) => d.isoDate === selectedDate)!;
-    setConfirmedBooking({
-      dayLabel: `${day.weekdayLabel} ${day.dayNumber}`,
-      time: selectedTime,
-    });
+    setConfirmedBooking({ dayLabel: dateLabel, time: selectedTime });
     setShowWhatsappModal(false);
   }
 
